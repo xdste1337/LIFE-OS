@@ -8,10 +8,9 @@
   const stateKey=(userId,workspaceId)=>`lifeosCloudCache:${userId}:${workspaceId}`;
   let user=null,workspaces=[],activeWorkspace=null,version=null,ready=false,timer=null,busy=false,pending=false,conflicted=false,pendingGuestData=null;
   const style=document.createElement('style');
-  style.textContent='.space-button{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.space-modal{max-width:440px}.space-list{display:grid;gap:8px;margin:16px 0}.space-choice{display:flex;justify-content:space-between;align-items:center;text-align:left;width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text)}.space-choice.active{border-color:var(--green2)}.space-kind{color:var(--muted);font-size:11px}.space-status{font-size:11px;color:var(--muted);min-height:18px}.space-create{display:flex;gap:8px;margin-top:14px}.space-create input{min-width:0;flex:1}';
+  style.textContent='.workspace{width:calc(100% - 8px);text-align:left;background:transparent;font-family:inherit;cursor:pointer}.workspace:hover{border-color:var(--green2)}.space-modal{max-width:440px}.space-list{display:grid;gap:8px;margin:16px 0}.space-choice{display:flex;justify-content:space-between;align-items:center;text-align:left;width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text)}.space-choice.active{border-color:var(--green2)}.space-kind{color:var(--muted);font-size:11px}.space-status{font-size:11px;color:var(--muted);min-height:18px}.space-create{display:flex;gap:8px;margin-top:14px}.space-create input{min-width:0;flex:1}';
   document.head.append(style);
-  const spaceButton=document.createElement('button');spaceButton.className='secondary space-button';spaceButton.id='spaceButton';spaceButton.textContent='Пространство';spaceButton.hidden=true;
-  document.querySelector('.top-actions')?.prepend(spaceButton);
+  const spaceButton=document.querySelector('#spaceButton');
   const cacheLocal=(wid)=>{if(user&&wid)localStorage.setItem(stateKey(user.id,wid),JSON.stringify(data))};
   const setState=value=>{data={...blankState(),...(value&&typeof value==='object'?value:{})};localStorage.lifeosData=JSON.stringify(data);render()};
   function status(text){const el=document.querySelector('#spaceStatus');if(el)el.textContent=text}
@@ -30,7 +29,9 @@
     if(activeWorkspace&&ready)await writeCloud();
     ready=false;busy=false;pending=false;conflicted=false;activeWorkspace=workspace;version=null;
     localStorage.setItem(`lifeosActiveSpace:${user.id}`,workspace.id);
-    spaceButton.textContent=workspace.name;spaceButton.title=workspace.name;
+    spaceButton.querySelector('.ws-name').textContent=workspace.name;
+    spaceButton.querySelector('.ws-sub').textContent=workspace.kind==='personal'?'Личное пространство':'Общее пространство';
+    spaceButton.title='Переключить пространство';
     const {data:row,error}=await client.from('workspace_app_state').select('payload,updated_at').eq('workspace_id',workspace.id).maybeSingle();
     if(error){activeWorkspace=null;toast('Не удалось загрузить пространство: '+error.message);return}
     if(row){version=row.updated_at;setState(row.payload);cacheLocal(workspace.id);toast('Облачные данные загружены')}
@@ -43,7 +44,7 @@
       setState(cached||blankState());ready=true;await writeCloud();
       if(!moveLocal&&hasLocal)toast('Личные записи остались в этом браузере');
     }
-    ready=true;spaceButton.hidden=false;
+    ready=true;
   }
   async function writeCloud(){
     if(!activeWorkspace||!user||!ready||conflicted)return;
@@ -71,7 +72,7 @@
     const nextUser=next?.user||null;
     if(nextUser?.id===user?.id)return;
     if(user&&activeWorkspace&&ready){if(timer){clearTimeout(timer);timer=null}await writeCloud()}
-    ready=false;activeWorkspace=null;workspaces=[];version=null;spaceButton.hidden=true;spaceButton.textContent='Пространство';
+    ready=false;activeWorkspace=null;workspaces=[];version=null;
     if(!user&&nextUser){pendingGuestData=localStorage.getItem('lifeosData');if(pendingGuestData)localStorage.setItem('lifeosGuestData',pendingGuestData)}
     user=nextUser;
     if(!user){const guest=localStorage.getItem('lifeosGuestData');if(guest){try{data=JSON.parse(guest);localStorage.lifeosData=guest;render()}catch{setState(blankState())}}else setState(blankState());pendingGuestData=null;return}
@@ -83,7 +84,10 @@
     const preferred=localStorage.getItem(`lifeosActiveSpace:${user.id}`),workspace=workspaces.find(w=>w.id===preferred)||workspaces.find(w=>w.kind==='personal')||workspaces[0];
     await switchWorkspace(workspace);
   }
-  spaceButton.onclick=()=>showSpacePicker();
+  spaceButton.onclick=()=>{if(!user){toast('Войди в аккаунт, чтобы управлять пространствами');return}showSpacePicker()};
+  const brand=document.querySelector('.brand');
+  if(brand){brand.setAttribute('role','button');brand.setAttribute('tabindex','0');brand.title='На главную';brand.style.cursor='pointer';brand.addEventListener('click',()=>{page='overview';render()});brand.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();page='overview';render()}})}
+  document.addEventListener('click',e=>{const overview=e.target.closest('[data-page="overview"]');if(!overview)return;e.preventDefault();e.stopImmediatePropagation();page='overview';render()},true);
   window.addEventListener('lifeos-auth-change',e=>onAuthChange(e.detail?.session));
   if(window.lifeOsAuthSession)onAuthChange(window.lifeOsAuthSession);
 })();
